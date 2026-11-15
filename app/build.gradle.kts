@@ -16,8 +16,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // 每次出新版都要改版本号（AGENTS.md）：versionName 和 versionCode 一起加
-        versionCode = 4
-        versionName = "0.4"
+        versionCode = 5
+        versionName = "0.5"
         buildConfigField("int", "BUILD_NUMBER", "$buildNumber")
         // 只打真手机用的两种 CPU（ML Kit 带的原生库每种都有一份，全打进去安装包要多一百多 MB）
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }

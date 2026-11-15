@@ -19,7 +19,9 @@
 | 2 | 云盘待命和遥控指令（info、拍照、录音、定位、手电筒、震动、响铃、robot） | 已做（0.2） |
 | 3 | 大疆云台蓝牙（Duml 协议、闭环转动、软限位、谁在控制） | 已做（0.3） |
 | 4 | 跟着人转、眼睛（CameraX + ML Kit） | 已做（0.4） |
-| 5 | Gemini 实时语音 | 没做 |
+| 5 | Gemini 实时语音 | 已做（0.5） |
+
+iPhone 版（0.9）有的功能，安卓版 0.5 都有了。之后 iPhone 版改了什么，这边照着改。
 
 ## 代码地图（`app/src/main/java/com/langhua98/vania/`）
 
@@ -38,6 +40,7 @@
 - `StandbyService.kt`：待命时的前台服务，通知栏一直显示「Vania 待命中」。
 - `Duml.kt`：大疆 DUML 协议（帧、CRC、拆帧、速度指令、姿态解算）。照 iPhone 版的 `Duml.swift` 翻的，`DumlTest` 用同一组标准答案（来自 Linggo 的 ble.html）逐字节核对，别改那些数。
 - `Gimbal.kt`：蓝牙低功耗连大疆 OM 云台（系统里连着的 → 上次那台 → 按名字扫描），写操作排队（安卓同一时间只能一个），控制逻辑和 iPhone 版一样：闭环 `turn`、给大模型和聊天框的 `aim`（右、上为正，软限位，先快后准）、给跟随的 `track`、`Owner` 谁在控制、遥控 `gimbal` 指令。
+- `Live.kt`：Gemini 实时语音。OkHttp 的 WebSocket；麦克风用通话模式录音（系统回声消除），没有回声消除的手机用对讲机模式；播放攒够 0.3 秒再开始，嘴型按播放头取音量和三个频段。工具和 iPhone 版一样（gimbal、see、change_outfit…，声明在 `Body.toolDeclaration`）。
 - `Follow.kt`：跟着人转。前摄（CameraX 的图像分析）+ ML Kit 人脸检测，在手机本地算，驱动 `Gimbal.track`；参数和 iPhone 版一样。默认关，开着时屏幕上有摄像头提示。
 - `Eyes.kt`：她的眼睛。拍一张照片变成文字交给聊天的大模型：默认用 ML Kit（人脸、类别、中文和英文的字），填了「眼睛」模型就问它。默认关。
 - ML Kit 的模型打包在 App 里（不需要谷歌服务），安装包因此大了约 60 MB；只打 arm64-v8a 和 armeabi-v7a 两种 CPU。

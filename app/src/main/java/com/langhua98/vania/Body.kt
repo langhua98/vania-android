@@ -30,6 +30,57 @@ object Body {
 """.trimIndent()
     }
 
+    /// 实时模式（Gemini Live）的提示词：用工具，不写标签
+    val PERSONA_TOOL: String get() = """
+你能控制自己的身体：手机夹在大疆云台上，云台能左右转、上下抬头低头。主人让你转头、看某个方向、抬头低头、回到正面、停下时，调用 gimbal 工具真的去转，再告诉主人。
+gimbal 的角度是相对正面的度数，右和上为正：action 用 turn 是在现在的基础上再转（right: -30 就是再往左 30°），用 look 是转到那个方向（right: 20, up: 10），center 回正面，stop 马上停，status 只问状态。
+主人说「跟着我」「一直看着我」时用 follow_on：手机会用前面的摄像头找主人的脸，自己一直面对着主人，不用你一直转；主人说「别跟了」时用 follow_off。
+每次调用的结果都会告诉你现在朝哪、每个方向还能转多少，下次不要超过；结果说没连上、到头了、被挡住时照实告诉主人，不要假装转了。
+你还能换衣服：主人让你换衣服时调用 change_outfit 工具，衣服名只能是：${outfitNames()}；主人没说换哪套就换一套和现在不一样的。
+你有一个 3D 的身体，能做动作：主人让你跳舞、挥手、比耶、点头、摇头等时，调用 play_action 工具，动作名只能是：${actionNames()}。
+屏幕里的你还能转身：主人让你转过去、侧过身、给他看看背后时，调用 turn_body 工具。
+屏幕的镜头也能换：主人想看你全身、半身，或者凑近看你的脸时，调用 set_camera 工具。
+""".trimIndent()
+
+    /// 实时模式的眼睛提示词
+    fun eyesNoteTool(canSee: Boolean): String {
+        if (!canSee) return eyesNote(false)
+        return """
+你有眼睛：主人问你看到了什么、让你看看某个东西或某个方向、问你他在不在时，调用 see 工具拍一张照片，结果里会告诉你看到了什么，再照着结果回答。
+camera 用 front 是屏幕朝着的方向（平时主人就在这边），用 back 是手机背面朝着的方向。要看别的方向就先用 gimbal 转过去再 see；找东西可以转几个方向各看一眼，最多看 4 次。
+只说结果里有的东西；结果说得很粗、看不清的时候照实说，不要编细节。没调用 see 就不要说自己看到了什么。
+""".trimIndent()
+    }
+
+    /// 给 Gemini Live 的工具声明
+    fun toolDeclaration(): JSONObject {
+        fun fn(name: String, desc: String, props: JSONObject, required: List<String>) = JSONObject().put("name", name).put("description", desc)
+            .put("parameters", JSONObject().put("type", "OBJECT").put("properties", props).apply { if (required.isNotEmpty()) put("required", org.json.JSONArray(required)) })
+        fun str(desc: String, enum: List<String>? = null) = JSONObject().put("type", "STRING").put("description", desc).apply { enum?.let { put("enum", org.json.JSONArray(it)) } }
+        fun num(desc: String) = JSONObject().put("type", "NUMBER").put("description", desc)
+        val fns = org.json.JSONArray()
+            .put(fn("gimbal", "转动机器人的身体（大疆云台）。角度是相对正面的度数，右和上为正。结果里有现在的朝向和每个方向还能转多少。", JSONObject()
+                .put("action", str("turn 在现在的基础上再转；look 转到相对正面的那个方向；center 回正面；stop 马上停；status 只问现在的状态；follow_on 开始一直面对着主人；follow_off 不跟了",
+                    listOf("turn", "look", "center", "stop", "status", "follow_on", "follow_off")))
+                .put("right", num("左右的度数，右为正、左为负。turn 时是再转多少，look 时是转到哪。不动就不填"))
+                .put("up", num("上下的度数，抬头为正、低头为负。不动就不填")), listOf("action")))
+            .put(fn("see", "用摄像头看一眼：拍一张照片，结果里用文字告诉你看到了什么。", JSONObject()
+                .put("camera", str("front 屏幕朝着的方向（主人平时在这边），back 手机背面朝着的方向。不填就是 front", listOf("front", "back"))), emptyList()))
+            .put(fn("move_gimbal", "（旧的，尽量用 gimbal）转动机器人的身体：左右转、抬头低头，或者回到正面。", JSONObject()
+                .put("direction", str("left 左转，right 右转，up 抬头，down 低头，center 回到正面", listOf("left", "right", "up", "down", "center")))
+                .put("degrees", num("转多少度：左右 5～90，上下 5～45；center 不用填")), listOf("direction")))
+            .put(fn("change_outfit", "给机器人换衣服（3D 角色换装）。", JSONObject()
+                .put("name", str("衣服名", Store.OUTFITS.map { it.name })), listOf("name")))
+            .put(fn("play_action", "让机器人的 3D 身体做一个动作：挥手、点头、摇头、跳舞、比耶等。", JSONObject()
+                .put("name", str("动作名", ACTIONS.map { it.first })), listOf("name")))
+            .put(fn("turn_body", "让屏幕里的 3D 身体转身（不是云台）：向左、向右转多少度，背对主人，或者转回来面对主人。", JSONObject()
+                .put("direction", str("left 向自己的左边转，right 向右边转，back 背对主人，center 转回来面对主人", listOf("left", "right", "back", "center")))
+                .put("degrees", num("转多少度，0～180；back、center 不用填")), listOf("direction")))
+            .put(fn("set_camera", "换屏幕的镜头：全身、半身、脸部特写，或者交给自动。", JSONObject()
+                .put("shot", str("景别", SHOTS.map { it.name })), listOf("shot")))
+        return JSONObject().put("functionDeclarations", fns)
+    }
+
     fun outfitNames() = Store.OUTFITS.joinToString("、") { it.name }
     fun actionNames() = ACTIONS.joinToString("、") { it.first }
 

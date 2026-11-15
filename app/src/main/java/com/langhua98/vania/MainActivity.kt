@@ -167,7 +167,7 @@ class MainActivity : Activity() {
             }
             "touch" -> {
                 if (input.hasFocus()) { hideKeyboard(); return }
-                if (app.talk.phase != Talk.Phase.IDLE) app.talk.tap()
+                if (app.talk.phase != Talk.Phase.IDLE || app.talk.live.phase != LiveTalk.Phase.OFF) app.talk.tap()
             }
         }
     }
@@ -290,18 +290,26 @@ class MainActivity : Activity() {
         val t = app.talk
         userBubble.text = t.userLine
         userBubble.visibility = if (t.userLine.isEmpty()) View.GONE else View.VISIBLE
-        herBubble.text = t.subtitle
-        herBubble.visibility = if (t.subtitle.isEmpty()) View.GONE else View.VISIBLE
+        val liveOn = t.live.phase != LiveTalk.Phase.OFF
+        val her = if (liveOn) t.live.caption else t.subtitle
+        herBubble.text = her
+        herBubble.visibility = if (her.isEmpty()) View.GONE else View.VISIBLE
         val typing = input.text.isNotBlank()
-        val active = t.phase != Talk.Phase.IDLE
+        val active = t.phase != Talk.Phase.IDLE || liveOn
         actionBtn.text = when {
             typing -> "➤"
+            liveOn -> "☎"
             t.phase == Talk.Phase.IDLE -> "🎤"
             t.phase == Talk.Phase.LISTENING -> "〰"
             else -> "■"
         }
         actionBtn.background = round(if (typing || active) 0xD9FF7A17.toInt() else 0x61000000, 21, 0x2EFFFFFF)
-        val hint = when (t.phase) {
+        val hint = when (t.live.phase) {
+            LiveTalk.Phase.CONNECTING -> "正在连实时语音"
+            LiveTalk.Phase.LISTENING -> "实时对话中，直接说话或打字"
+            LiveTalk.Phase.SPEAKING -> "直接说话就能打断她"
+            LiveTalk.Phase.OFF -> null
+        } ?: when (t.phase) {
             Talk.Phase.IDLE -> "打字或点麦克风聊天"
             Talk.Phase.LISTENING -> if (t.conversing) "在听，说「再见」结束" else "正在听"
             Talk.Phase.THINKING -> "在想"

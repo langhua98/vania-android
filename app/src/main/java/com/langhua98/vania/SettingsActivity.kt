@@ -65,6 +65,10 @@ class SettingsActivity : Activity() {
         field("API 密钥", s.llmKey, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { s.llmKey = it }
         note("默认用 DeepSeek（${Store.DEFAULT_LLM_BASE}），填 DeepSeek 的 API 密钥就能用。模型二选一：deepseek-chat 回答快；deepseek-reasoner 先想再答，慢一些。填完自动保存。密钥加密存在这台手机上。")
 
+        section("实时语音（Gemini Live）")
+        field("Gemini API 密钥（aistudio.google.com 免费申请）", s.geminiKey, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { s.geminiKey = it }
+        note("填了就用实时语音聊天：像打电话一样，随时插话打断她，开口更快；声音是 Gemini 自带的女声。免费档有用量上限，数据谷歌可能用来改进产品。连不上时自动改用上面的 DeepSeek。空着就一直用 DeepSeek。")
+
         section("机器人")
         label("衣服")
         spinner(Store.OUTFITS.map { it.id to it.name }, s.outfit) { s.outfit = it }
@@ -74,8 +78,8 @@ class SettingsActivity : Activity() {
         spinner(listOf("high" to "高", "low" to "省电"), s.faceQuality) { s.faceQuality = it }
         note("打开 App 就是 3D 角色（Yuki）。点麦克风开始聊天，之后像打电话一样轮流说，说「再见」结束；也可以打字。可以对她说「换上洋装」「跳个舞」「转过去」「让我看看你的脸」。闲着的时候点她的头或手，她会有反应。画面卡就把画质改成「省电」。")
 
-        section("这一版还没有的")
-        note("安卓版是照着 iPhone 版 Vania 一批一批做的。这一版有：3D 角色、聊天框、快捷菜单、大模型对话、她说话、换装、背景、镜头、动作、云盘待命和遥控指令、大疆云台、跟着人转、眼睛。还没有：Gemini 实时语音，下一版加上。")
+        section("和 iPhone 版")
+        note("安卓版是照着 iPhone 版 Vania 做的，iPhone 版有的功能这一版都有了：3D 角色、聊天框、快捷菜单、大模型对话、她说话、Gemini 实时语音、换装、背景、镜头、动作、云盘待命和遥控指令、大疆云台、跟着人转、眼睛。")
 
         section("记录")
         logView = TextView(this).apply { textSize = 11f; typeface = Typeface.MONOSPACE; setTextColor(0xFFCCCCCC.toInt()) }

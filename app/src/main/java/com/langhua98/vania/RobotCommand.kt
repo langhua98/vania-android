@@ -88,8 +88,8 @@ object RobotCommand {
             "say" -> {
                 val text = str("text")
                 if (text.isEmpty()) return CmdResult("say 要带 text")
-                talk.speak(text, str("emotion").ifEmpty { "neutral" })
-                CmdResult("在说：$text")
+                val ok = talk.speak(text, str("emotion").ifEmpty { "neutral" })
+                CmdResult(if (ok) "在说：$text" else "她正在实时语音聊天，没有插话")
             }
 
             "reset" -> {

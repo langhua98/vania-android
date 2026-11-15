@@ -53,6 +53,19 @@ class BodyTest {
         assertNull(Store.backgroundCommand("你好"))
     }
 
+    @Test fun realtime() {
+        // 文字稿里汉字之间多出来的空格去掉，英文单词之间的留着
+        assertEquals("台岛啦，你好。hello world", LiveTalk.tidy(" 台 岛 啦 ， 你 好 。hello world "))
+        // 工具声明：七个工具，名字和 iPhone 版一样，枚举不能是空的
+        val fns = Body.toolDeclaration().getJSONArray("functionDeclarations")
+        val names = (0 until fns.length()).map { fns.getJSONObject(it).getString("name") }
+        assertEquals(listOf("gimbal", "see", "move_gimbal", "change_outfit", "play_action", "turn_body", "set_camera"), names)
+        val outfit = fns.getJSONObject(3).getJSONObject("parameters").getJSONObject("properties").getJSONObject("name").getJSONArray("enum")
+        assertEquals(Store.OUTFITS.size, outfit.length())
+        assertTrue(Body.PERSONA_TOOL.contains("gimbal") && Body.eyesNoteTool(true).contains("see"))
+        assertTrue(Body.eyesNoteTool(false).contains("看不见"))
+    }
+
     @Test fun sentences() {
         assertEquals(3, Talk.sentenceEnd("你好。后面"))
         assertNull(Talk.sentenceEnd("还没说完"))
