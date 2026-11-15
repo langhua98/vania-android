@@ -7,3 +7,4 @@ local.properties
 # 角色模型很大，编译前用 scripts/fetch-models.sh 下载，不进仓库
 app/src/main/assets/live2d/models/
 .kotlin/
+__pycache__/
