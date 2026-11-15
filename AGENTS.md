@@ -16,7 +16,7 @@
 | 批 | 内容 | 状态 |
 |---|---|---|
 | 1 | 3D 角色、聊天框、快捷菜单、DeepSeek 对话、她说话、换装、背景、镜头、动作 | 已做（0.1） |
-| 2 | 云盘待命和遥控指令（info、拍照、录音、定位、手电筒、震动、响铃、robot） | 没做 |
+| 2 | 云盘待命和遥控指令（info、拍照、录音、定位、手电筒、震动、响铃、robot） | 已做（0.2） |
 | 3 | 大疆云台蓝牙（Duml 协议、闭环转动、软限位、谁在控制） | 没做，`Gimbal.kt` 现在是「没连上」的空壳 |
 | 4 | 跟着人转、眼睛（CameraX + ML Kit） | 没做，`Eyes.kt` 现在照实说看不见 |
 | 5 | Gemini 实时语音 | 没做 |
@@ -31,13 +31,18 @@
 - `Body.kt`：大模型怎么控制身体：回答里的标签、短指令、快捷菜单、云台动作。对应 iOS 的 `Body.swift`。
 - `Talk.kt`：对话：语音识别 → 大模型（流式）→ 逐句合成播放，连续对话、打断、`[看一眼]` 的循环。对应 iOS 的 `Talk.swift`。
 - `Chat.kt`：大模型接口和语音合成服务。`Speaker.kt`：放 WAV（嘴跟着音量）和系统自带的朗读。
+- `Cloud.kt`：小橘云盘客户端（文件接口、即时信箱）和信箱名 `RemoteBox`。协议见 xiaoju-remote 的 `AGENTS.md`「通信协议」，改协议几边要一起改。
+- `Standby.kt`：待命循环（先走即时信箱，没有就退回文件信箱）和执行一条指令、原路回执。不碰安卓的东西，`StandbyTest` 用假云盘测。
+- `Commands.kt`：硬件指令（info、torch、photo、audio、location、vibrate、ring；shell 不支持）。拍照、录音、定位只在 App 在前台时做。
+- `RobotCommand.kt`：`{"do":"robot"}` 指令，控制屏幕里的角色。
+- `StandbyService.kt`：待命时的前台服务，通知栏一直显示「Vania 待命中」。
 - `Gimbal.kt`、`Eyes.kt`：空壳，见上面的进度。
 
 ## 怎么编译、怎么测
 
 - 推送后 GitHub Actions（`.github/workflows/build.yml`）会下载模型、跑单元测试、编 APK，发布到 Release「latest」。
 - 本地：`sh scripts/fetch-models.sh && ./gradlew testDebugUnitTest assembleRelease`（要装 Android SDK，`local.properties` 里写 `sdk.dir`）。
-- 单元测试在 `app/src/test/`，测的是不依赖手机的规则（短指令、标签、换装换背景、断句、WAV 解析）。改了这些规则要跟着改测试。
+- 单元测试在 `app/src/test/`：`BodyTest` 测不依赖手机的规则（短指令、标签、换装换背景、断句、WAV 解析）；`StandbyTest` 用 `tests/mock_cloud.py`（从 xiaoju-remote 的 `scripts/test/` 复制来的假云盘，要 python3）测待命的协议，旧服务端（文件信箱）和新服务端（即时信箱）各跑一遍。改了这些要跟着改测试。
 - 真机测试要 William 自己做。
 
 ## 规则

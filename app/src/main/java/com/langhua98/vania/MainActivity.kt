@@ -51,6 +51,7 @@ class MainActivity : Activity() {
     private lateinit var actionBtn: TextView
     private lateinit var status: TextView
     private var crashes = 0
+    private val standbyListener: () -> Unit = { refresh() }
     private var loadedQuality = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,6 +81,8 @@ class MainActivity : Activity() {
             }
         }
         app.talk.warmUp()
+        app.onStandby += standbyListener
+        if (savedInstanceState == null && app.store.autoStandby && app.store.token.isNotEmpty() && !app.running) app.startStandby()
         refresh()
         val s = app.store
         if (s.llmKey.isEmpty() && s.geminiKey.isEmpty() && s.token.isEmpty() && savedInstanceState == null) {
@@ -88,6 +91,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        app.onStandby -= standbyListener
         app.talk.cancel()
         app.face.detach()
         web?.destroy()
@@ -303,7 +307,7 @@ class MainActivity : Activity() {
             Talk.Phase.THINKING -> "在想"
             Talk.Phase.SPEAKING -> "点一下打断"
         }
-        status.text = "○ 未待命 · $hint"
+        status.text = (if (app.running) "● 待命中 · ${app.store.device}" else "○ 未待命") + " · $hint"
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

@@ -16,8 +16,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // 每次出新版都要改版本号（AGENTS.md）：versionName 和 versionCode 一起加
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
         buildConfigField("int", "BUILD_NUMBER", "$buildNumber")
     }
 
@@ -73,8 +73,14 @@ dependencies {
     implementation("androidx.webkit:webkit:1.12.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // 拍照（不用预览）、以后的跟着人转和眼睛
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
 
     testImplementation("junit:junit:4.13.2")
     // 安卓自带的 org.json 在电脑上跑测试时是空壳，测试用真的
     testImplementation("org.json:json:20231013")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
 }

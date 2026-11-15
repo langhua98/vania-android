@@ -9,6 +9,9 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.ViewGroup
+import android.Manifest
+import android.widget.Button
+import android.widget.Switch
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
@@ -35,6 +38,24 @@ class SettingsActivity : Activity() {
         setContentView(scroll)
         val s = app.store
 
+        note("这台手机开「待命」后，等另一台设备通过小橘云盘发来的指令：拍照、录音、定位、手电筒、震动、响铃，还能遥控屏幕里的机器人（robot 指令）。待命时通知栏一直显示「Vania 待命中」，动作都记在最下面。拍照、录音、定位要 Vania 在前台。")
+        section("云盘")
+        field("云盘地址", s.base, InputType.TYPE_TEXT_VARIATION_URI) { s.base = it }
+        field("云盘令牌 xa_…", s.token, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { s.token = it }
+        section("这台设备")
+        field("设备名，比如 测试机B", s.device, 0) { s.device = it }
+        field("配对口令（两台要一样）", s.pair, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { s.pair = it }
+        button("授权硬件（相机 / 麦克风 / 定位 / 通知）") {
+            requestPermissions(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS), 2)
+        }
+        standbyBtn = button(standbyLabel()) { if (app.running) app.stopStandby() else app.startStandby() }
+        toggle("打开 App 时自动待命", s.autoStandby) { s.autoStandby = it }
+        standbyNote = TextView(this).apply { textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(6), 0, 0) }
+        col.addView(standbyNote)
+        refreshStandby()
+        app.onStandby += standbyListener
+
         section("对话（大模型）")
         field("接口地址（默认 DeepSeek）", s.llmBase, InputType.TYPE_TEXT_VARIATION_URI) { s.llmBase = it }
         choice(Store.LLM_MODELS, s.llmModel) { s.llmModel = it }
@@ -51,7 +72,7 @@ class SettingsActivity : Activity() {
         note("打开 App 就是 3D 角色（Yuki）。点麦克风开始聊天，之后像打电话一样轮流说，说「再见」结束；也可以打字。可以对她说「换上洋装」「跳个舞」「转过去」「让我看看你的脸」。闲着的时候点她的头或手，她会有反应。画面卡就把画质改成「省电」。")
 
         section("这一版还没有的")
-        note("安卓版是照着 iPhone 版 Vania 一批一批做的。这一版有：3D 角色、聊天框、快捷菜单、大模型对话、她说话、换装、背景、镜头、动作。还没有：云盘待命和遥控、大疆云台、跟着人转、眼睛、Gemini 实时语音，后面几版加上。")
+        note("安卓版是照着 iPhone 版 Vania 一批一批做的。这一版有：3D 角色、聊天框、快捷菜单、大模型对话、她说话、换装、背景、镜头、动作、云盘待命和遥控指令。还没有：大疆云台、跟着人转、眼睛、Gemini 实时语音，后面几版加上。")
 
         section("记录")
         logView = TextView(this).apply { textSize = 11f; typeface = Typeface.MONOSPACE; setTextColor(0xFFCCCCCC.toInt()) }
@@ -64,8 +85,29 @@ class SettingsActivity : Activity() {
     }
 
     override fun onDestroy() {
-        if (app.onLog != null) app.onLog = null
+        app.onLog = null
+        app.onStandby -= standbyListener
         super.onDestroy()
+    }
+
+    private val standbyListener: () -> Unit = { refreshStandby() }
+    private lateinit var standbyBtn: Button
+    private lateinit var standbyNote: TextView
+    private fun standbyLabel() = if (app.running) "停止待命" else "开始待命"
+    private fun refreshStandby() {
+        standbyBtn.text = standbyLabel()
+        standbyNote.text = if (app.running) "● 待命中（设备名：${app.store.device}）" else "○ 未运行"
+        standbyNote.setTextColor(if (app.running) 0xFF34C759.toInt() else Color.GRAY)
+    }
+
+    private fun button(text: String, onClick: () -> Unit): Button {
+        val b = Button(this).apply { this.text = text; isAllCaps = false; setOnClickListener { onClick() } }
+        col.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        return b
+    }
+
+    private fun toggle(text: String, value: Boolean, onChange: (Boolean) -> Unit) {
+        col.addView(Switch(this).apply { this.text = text; isChecked = value; textSize = 15f; setOnCheckedChangeListener { _, v -> onChange(v) } })
     }
 
     private fun refreshLog() {

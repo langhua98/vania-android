@@ -16,4 +16,9 @@ class Gimbal {
     fun setHomeHere() {}
 
     fun stateText(): String = "云台没连上。"
+
+    /// 遥控指令 {"do":"gimbal", …}
+    suspend fun command(cmd: org.json.JSONObject): String = "这台手机还没接云台（安卓版第 3 批再做）。"
+
+    fun statusJSON(): org.json.JSONObject = org.json.JSONObject().put("connected", false).put("phase", "未连接")
 }
