@@ -64,6 +64,16 @@ class Talk(private val ctx: Context, private val store: Store, private val face:
     // 云台标签一个接一个转
     private var gimbalChain: Job? = null
 
+    /// 实时语音（Gemini Live）：填了 Gemini 密钥就优先用它，连不上退回下面的普通模式
+    val live = LiveTalk(ctx, store, face, gimbal, log).also { l ->
+        l.onChange = { changed() }
+        l.onFail = { _ ->
+            log("改用普通对话模式")
+            conversing = true
+            startListening()
+        }
+    }
+
     private fun changed() = onChange?.invoke()
     private fun setPhase(p: Phase) { phase = p; changed() }
 
@@ -72,6 +82,12 @@ class Talk(private val ctx: Context, private val store: Store, private val face:
 
     /// 点了麦克风按钮：没事时开始连续对话；正在听就当说完了；正在想或正在说就打断她，接着听你说
     fun tap() {
+        // 实时语音：点一下开始，再点一下结束（中间直接说话就行，能随时插话）
+        if (live.phase != LiveTalk.Phase.OFF) { live.stop(); return }
+        if (phase == Phase.IDLE && live.available) {
+            if (ctx.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) { needMic?.invoke(); return }
+            live.start(); return
+        }
         when (phase) {
             Phase.IDLE -> { conversing = true; startListening() }
             Phase.LISTENING -> recognizer?.stopListening()
@@ -87,6 +103,7 @@ class Talk(private val ctx: Context, private val store: Store, private val face:
     }
 
     fun cancel() {
+        live.stop()
         conversing = false
         llmJob?.cancel(); llmJob = null
         stopRecognizer()
@@ -213,6 +230,10 @@ class Talk(private val ctx: Context, private val store: Store, private val face:
             return
         }
         subtitle = ""; changed()
+        if (live.phase != LiveTalk.Phase.OFF) {
+            if (live.sendText(text)) log("打字：$text") else log("实时语音还没连上，这句没发出去")
+            return
+        }
         log("打字：$text")
         conversing = false
         llmJob?.cancel(); llmJob = null
@@ -350,12 +371,14 @@ class Talk(private val ctx: Context, private val store: Store, private val face:
     }
 
     /// 别人（遥控指令）让她说一句话。text 里也可以带动作、镜头、转身标签
-    fun speak(text: String, emotion: String = "neutral") {
+    fun speak(text: String, emotion: String = "neutral"): Boolean {
+        if (live.phase != LiveTalk.Phase.OFF) return false   // 实时语音进行中不插话
         conversing = false
         llmJob?.cancel(); llmJob = null
         stopRecognizer()
         setPhase(Phase.IDLE)
         say(text, emotion)
+        return true
     }
 
     private fun say(text: String, emo: String) {

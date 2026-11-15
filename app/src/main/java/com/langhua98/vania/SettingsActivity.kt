@@ -9,6 +9,10 @@ import android.text.InputType
 import android.text.TextWatcher
 import android.util.TypedValue
 import android.view.ViewGroup
+import android.Manifest
+import kotlinx.coroutines.launch
+import android.widget.Button
+import android.widget.Switch
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
@@ -35,11 +39,35 @@ class SettingsActivity : Activity() {
         setContentView(scroll)
         val s = app.store
 
+        note("这台手机开「待命」后，等另一台设备通过小橘云盘发来的指令：拍照、录音、定位、手电筒、震动、响铃，还能遥控屏幕里的机器人（robot 指令）。待命时通知栏一直显示「Vania 待命中」，动作都记在最下面。拍照、录音、定位要 Vania 在前台。")
+        section("云盘")
+        field("云盘地址", s.base, InputType.TYPE_TEXT_VARIATION_URI) { s.base = it }
+        field("云盘令牌 xa_…", s.token, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { s.token = it }
+        section("这台设备")
+        field("设备名，比如 测试机B", s.device, 0) { s.device = it }
+        field("配对口令（两台要一样）", s.pair, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { s.pair = it }
+        button("授权硬件（相机 / 麦克风 / 定位 / 通知）") {
+            requestPermissions(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO,
+                Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.POST_NOTIFICATIONS) + app.gimbal.permissions(), 2)
+        }
+        standbyBtn = button(standbyLabel()) { if (app.running) app.stopStandby() else app.startStandby() }
+        toggle("打开 App 时自动待命", s.autoStandby) { s.autoStandby = it }
+        standbyNote = TextView(this).apply { textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(6), 0, 0) }
+        col.addView(standbyNote)
+        refreshStandby()
+        app.onStandby += standbyListener
+
+        gimbalSection()
+
         section("对话（大模型）")
         field("接口地址（默认 DeepSeek）", s.llmBase, InputType.TYPE_TEXT_VARIATION_URI) { s.llmBase = it }
         choice(Store.LLM_MODELS, s.llmModel) { s.llmModel = it }
         field("API 密钥", s.llmKey, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { s.llmKey = it }
         note("默认用 DeepSeek（${Store.DEFAULT_LLM_BASE}），填 DeepSeek 的 API 密钥就能用。模型二选一：deepseek-chat 回答快；deepseek-reasoner 先想再答，慢一些。填完自动保存。密钥加密存在这台手机上。")
+
+        section("实时语音（Gemini Live）")
+        field("Gemini API 密钥（aistudio.google.com 免费申请）", s.geminiKey, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { s.geminiKey = it }
+        note("填了就用实时语音聊天：像打电话一样，随时插话打断她，开口更快；声音是 Gemini 自带的女声。免费档有用量上限，数据谷歌可能用来改进产品。连不上时自动改用上面的 DeepSeek。空着就一直用 DeepSeek。")
 
         section("机器人")
         label("衣服")
@@ -50,8 +78,8 @@ class SettingsActivity : Activity() {
         spinner(listOf("high" to "高", "low" to "省电"), s.faceQuality) { s.faceQuality = it }
         note("打开 App 就是 3D 角色（Yuki）。点麦克风开始聊天，之后像打电话一样轮流说，说「再见」结束；也可以打字。可以对她说「换上洋装」「跳个舞」「转过去」「让我看看你的脸」。闲着的时候点她的头或手，她会有反应。画面卡就把画质改成「省电」。")
 
-        section("这一版还没有的")
-        note("安卓版是照着 iPhone 版 Vania 一批一批做的。这一版有：3D 角色、聊天框、快捷菜单、大模型对话、她说话、换装、背景、镜头、动作。还没有：云盘待命和遥控、大疆云台、跟着人转、眼睛、Gemini 实时语音，后面几版加上。")
+        section("和 iPhone 版")
+        note("安卓版是照着 iPhone 版 Vania 做的，iPhone 版有的功能这一版都有了：3D 角色、聊天框、快捷菜单、大模型对话、她说话、Gemini 实时语音、换装、背景、镜头、动作、云盘待命和遥控指令、大疆云台、跟着人转、眼睛。")
 
         section("记录")
         logView = TextView(this).apply { textSize = 11f; typeface = Typeface.MONOSPACE; setTextColor(0xFFCCCCCC.toInt()) }
@@ -64,8 +92,100 @@ class SettingsActivity : Activity() {
     }
 
     override fun onDestroy() {
-        if (app.onLog != null) app.onLog = null
+        app.onLog = null
+        app.onStandby -= standbyListener
+        app.gimbal.onChange -= gimbalListener
+        app.follower.onChange -= gimbalListener
         super.onDestroy()
+    }
+
+    private val standbyListener: () -> Unit = { refreshStandby() }
+
+    // ───────── 云台 ─────────
+
+    private val gimbalListener: () -> Unit = { refreshGimbal() }
+    private lateinit var gimbalState: TextView
+    private lateinit var gimbalPads: LinearLayout
+    private lateinit var gimbalBtn: Button
+    private lateinit var followSwitch: Switch
+    private lateinit var followState: TextView
+
+    private fun gimbalSection() {
+        val g = app.gimbal
+        section("云台（大疆 OM）")
+        gimbalState = TextView(this).apply { textSize = 13f; setTextColor(Color.LTGRAY) }
+        col.addView(gimbalState)
+        gimbalPads = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        fun pad(label: String, act: () -> Unit) = gimbalPads.addView(Button(this).apply { text = label; setOnClickListener { act() } },
+            LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+        pad("←") { g.manualMove(-25.0, 0.0, 0.6) }
+        pad("↑") { g.manualMove(0.0, 20.0, 0.6) }
+        pad("↓") { g.manualMove(0.0, -20.0, 0.6) }
+        pad("→") { g.manualMove(25.0, 0.0, 0.6) }
+        pad("◎") { kotlinx.coroutines.MainScope().launch { g.aim(0.0, 0.0, false, Gimbal.Owner.MANUAL) } }
+        col.addView(gimbalPads)
+        gimbalBtn = button("连接云台") {
+            if (g.connected || g.phase == Gimbal.Phase.SCANNING || g.phase == Gimbal.Phase.CONNECTING) g.disconnect()
+            else if (!g.hasPermission()) requestPermissions(g.permissions(), 3)
+            else g.connect()
+        }
+        toggle("打开 App 时自动连", app.store.gimbalAuto) { app.store.gimbalAuto = it }
+        toggle("抬头低头反了", g.pitchFlipped) { g.pitchFlipped = it }
+        followSwitch = Switch(this).apply {
+            text = "跟着我转（用前摄找人脸）"; isChecked = app.store.follow; textSize = 15f
+            setOnCheckedChangeListener { _, v -> if (v != app.store.follow) app.setFollow(v) }
+        }
+        col.addView(followSwitch)
+        followState = TextView(this).apply { textSize = 12f; setTextColor(Color.GRAY) }
+        col.addView(followState)
+        app.follower.onChange += gimbalListener
+        note("把这台手机夹在大疆 OM 云台上，它就是机器人的身体：别的设备可以远程让它转头（gimbal 指令），机器人的脸也跟着云台的朝向看。用之前先在 DJI Mimo 里断开云台。箭头试着转一下，靶心回到正面（连上时的朝向）。她自己也能转：说「往左看看」「看右边 20 度」「回正」「停」，或者在聊天框打「云台 左转 30」。左右最多各转 120°，抬头 35°、低头 20°。点上箭头她却低头的话，打开「抬头低头反了」。「跟着我转」打开以后，前摄在手机里找你的脸（不保存、不上传），你走到哪她转到哪；屏幕上方会一直显示摄像头的提示；每次打开 App 要重新开。也可以对她说「跟着我」「别跟了」。")
+
+        section("眼睛")
+        toggle("允许她用摄像头看", app.store.allowSee) { app.store.allowSee = it }
+        field("眼睛模型的接口地址（可以不填）", app.store.eyeBase, InputType.TYPE_TEXT_VARIATION_URI) { app.store.eyeBase = it }
+        field("模型名（要能看图）", app.store.eyeModel, 0) { app.store.eyeModel = it }
+        field("API 密钥", app.store.eyeKey, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { app.store.eyeKey = it }
+        note("打开以后，你问她「看到了什么」「我在不在」「看看左边有什么」，她会拍一张照片再回答；拍的时候屏幕上方有摄像头的提示，照片不保存。下面三项不填：用手机自己识别，不联网，只认得出有没有人脸、大概是什么东西、看到什么字，比较粗。三项都填（OpenAI 兼容接口、能看图的模型）：照片会发给你填的这个接口，让它描述，细得多。")
+        g.onChange += gimbalListener
+        refreshGimbal()
+    }
+
+    private fun refreshGimbal() {
+        val g = app.gimbal
+        gimbalState.text = "${g.name.ifEmpty { "大疆 OM 云台" }}：${if (g.busy) "正在转" else g.phase.label}" +
+            (if (g.connected) "\n" + g.status().lines().drop(1).joinToString("\n") else if (g.note.isNotEmpty()) "\n" + g.note else "")
+        gimbalState.setTextColor(if (g.connected) 0xFF34C759.toInt() else Color.LTGRAY)
+        gimbalPads.visibility = if (g.connected) android.view.View.VISIBLE else android.view.View.GONE
+        gimbalBtn.text = if (g.connected || g.phase == Gimbal.Phase.SCANNING || g.phase == Gimbal.Phase.CONNECTING) "断开云台" else "连接云台"
+        if (::followSwitch.isInitialized) {
+            if (followSwitch.isChecked != app.store.follow) followSwitch.isChecked = app.store.follow
+            val f = app.follower
+            followState.text = if (app.store.follow || f.phase != FaceFollower.Phase.OFF) "跟随：${f.phase.label}" else ""
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 3 && app.gimbal.hasPermission()) app.gimbal.connect()
+    }
+    private lateinit var standbyBtn: Button
+    private lateinit var standbyNote: TextView
+    private fun standbyLabel() = if (app.running) "停止待命" else "开始待命"
+    private fun refreshStandby() {
+        standbyBtn.text = standbyLabel()
+        standbyNote.text = if (app.running) "● 待命中（设备名：${app.store.device}）" else "○ 未运行"
+        standbyNote.setTextColor(if (app.running) 0xFF34C759.toInt() else Color.GRAY)
+    }
+
+    private fun button(text: String, onClick: () -> Unit): Button {
+        val b = Button(this).apply { this.text = text; isAllCaps = false; setOnClickListener { onClick() } }
+        col.addView(b, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        return b
+    }
+
+    private fun toggle(text: String, value: Boolean, onChange: (Boolean) -> Unit) {
+        col.addView(Switch(this).apply { this.text = text; isChecked = value; textSize = 15f; setOnCheckedChangeListener { _, v -> onChange(v) } })
     }
 
     private fun refreshLog() {

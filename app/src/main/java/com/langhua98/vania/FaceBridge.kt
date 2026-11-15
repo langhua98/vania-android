@@ -71,6 +71,28 @@ class FaceBridge {
         ready = false
     }
 
+    // ───────── 待命循环里的事件 → 表情 ─────────
+
+    fun commandStarted(action: String) {
+        when (action) {
+            "robot" -> return   // 直接控制角色的指令，不另外变表情
+            "photo" -> { send("type" to "sensing", "camera" to true); send("type" to "robot_state", "state" to "observing", "emotion" to "neutral") }
+            "audio" -> { send("type" to "sensing", "mic" to true); send("type" to "robot_state", "state" to "listening", "emotion" to "neutral") }
+            "ring" -> send("type" to "robot_state", "state" to "speaking", "emotion" to "surprised")
+            "gimbal" -> send("type" to "robot_state", "state" to "observing", "emotion" to "neutral")
+            else -> send("type" to "robot_state", "state" to "thinking", "emotion" to "neutral")
+        }
+    }
+
+    fun commandFinished(ok: Boolean) {
+        send("type" to "sensing", "camera" to false, "mic" to false)
+        send("type" to "robot_state", "state" to "idle", "emotion" to if (ok) "happy" else "confused", "duration_ms" to 1500)
+    }
+
+    fun commandRejected() {
+        send("type" to "robot_state", "state" to "idle", "emotion" to "confused", "duration_ms" to 2000)
+    }
+
     fun detach() {
         ready = false
         web = null
