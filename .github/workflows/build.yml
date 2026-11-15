@@ -1,0 +1,72 @@
+name: Build Vania apk
+
+# 在 GitHub 的 Ubuntu 机器上编安卓版 Vania：先下载角色模型、跑单元测试，再编安装包，
+# 发布到 Release「latest」（每次覆盖），固定文件名 Vania-latest.apk。
+on:
+  push:
+    paths:
+      - "app/**"
+      - "build.gradle.kts"
+      - "settings.gradle.kts"
+      - "gradle/**"
+      - "scripts/fetch-models.sh"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vania-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platform-tools platforms;android-35 build-tools;35.0.0"
+
+      - name: Fetch Yuki models
+        # 三套衣服的模型不放仓库，编译前从公开数据集 langhua1998/yuki-model 下载
+        run: sh scripts/fetch-models.sh
+
+      - name: Unit tests
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest --no-daemon
+
+      - name: Build APK
+        run: ./gradlew assembleRelease --no-daemon --stacktrace -PbuildNumber=${{ github.run_number }}
+
+      - name: Name the APK
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          [ -f "$apk" ] || { echo "::error::没编出 $apk"; exit 1; }
+          # 模型一定要在里面（不然打开是黑屏）
+          unzip -l "$apk" | grep -q 'assets/live2d/models/Yuki_outfit1.glb'
+          version=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts | head -1)
+          out="Vania-$version-build$GITHUB_RUN_NUMBER.apk"
+          cp "$apk" "$out"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          echo "APK=$out" >> "$GITHUB_ENV"
+
+      - name: Publish to the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete latest --yes --cleanup-tag || true
+          cp "$APK" Vania-latest.apk
+          gh release create latest "$APK" Vania-latest.apk --prerelease \
+            --title "Vania 安卓版 ${VERSION}（构建 ${GITHUB_RUN_NUMBER}）" \
+            --notes "安卓版 Vania，直接下载安装（Android 8 以上）。签名固定，新版本可以直接覆盖安装。"
