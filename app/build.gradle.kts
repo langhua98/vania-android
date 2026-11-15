@@ -16,9 +16,11 @@ android {
         minSdk = 26
         targetSdk = 35
         // 每次出新版都要改版本号（AGENTS.md）：versionName 和 versionCode 一起加
-        versionCode = 3
-        versionName = "0.3"
+        versionCode = 4
+        versionName = "0.4"
         buildConfigField("int", "BUILD_NUMBER", "$buildNumber")
+        // 只打真手机用的两种 CPU（ML Kit 带的原生库每种都有一份，全打进去安装包要多一百多 MB）
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
     signingConfigs {
@@ -78,6 +80,11 @@ dependencies {
     implementation("androidx.camera:camera-camera2:1.3.4")
     implementation("androidx.camera:camera-lifecycle:1.3.4")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
+    implementation("androidx.exifinterface:exifinterface:1.3.7")
+    // 跟着人转、眼睛：ML Kit 的模型打包在 App 里，在手机本地识别，不联网、不要谷歌服务
+    implementation("com.google.mlkit:face-detection:16.1.7")
+    implementation("com.google.mlkit:image-labeling:17.0.9")
+    implementation("com.google.mlkit:text-recognition-chinese:16.0.1")
 
     testImplementation("junit:junit:4.13.2")
     // 安卓自带的 org.json 在电脑上跑测试时是空壳，测试用真的

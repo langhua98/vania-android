@@ -21,6 +21,8 @@ class VaniaApp : Application() {
     lateinit var store: Store; private set
     val face = FaceBridge()
     lateinit var gimbal: Gimbal; private set
+    /// 跟着人转（见 Follow.kt）
+    lateinit var follower: FaceFollower; private set
     lateinit var talk: Talk; private set
 
     /// 运行记录（设置页最下面显示），最多留 200 行。不记密钥、不记照片内容
@@ -48,6 +50,19 @@ class VaniaApp : Application() {
             face.send("type" to "gimbal", "yaw" to Math.round(yaw * 10) / 10.0, "pitch" to Math.round(pitch * 10) / 10.0, "connected" to connected)
         }
         if (store.gimbalAuto && gimbal.hasPermission()) gimbal.connect()
+        follower = FaceFollower(this, gimbal)
+        follower.onLog = { log(it) }
+        follower.onSensing = { on -> face.send("type" to "sensing", "camera" to on) }
+        // 跟随开着时前摄被它占着，「看一眼」从它那里借一帧
+        Eyes.borrowFrame = { follower.snapshot() }
+        // 大模型、聊天框开关跟随
+        Body.followSwitch = { on ->
+            val why = if (on) follower.blocker() else null
+            if (why != null) why else {
+                setFollow(on)
+                if (on) "好，开始跟着主人了：前面的摄像头在找主人的脸，手机会自己一直面对着主人。" else "不跟了，摄像头已经关掉。"
+            }
+        }
         talk = Talk(this, store, face, gimbal) { log(it) }
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             private var resumed = 0
@@ -69,6 +84,18 @@ class VaniaApp : Application() {
             onLog?.invoke()
         }
         if (Looper.myLooper() == Looper.getMainLooper()) add.run() else main.post(add)
+    }
+
+    /// 开关「跟着人转」。设置页的开关变了也走这里
+    fun setFollow(on: Boolean) {
+        if (on) {
+            follower.blocker()?.let { log("跟随：$it"); store.follow = false; follower.onChange.toList().forEach { f -> f() }; return }
+            store.follow = true
+            follower.start()
+        } else {
+            store.follow = false
+            follower.stop()
+        }
     }
 
     // ───────── 待命 ─────────

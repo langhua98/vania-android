@@ -75,7 +75,7 @@ class SettingsActivity : Activity() {
         note("打开 App 就是 3D 角色（Yuki）。点麦克风开始聊天，之后像打电话一样轮流说，说「再见」结束；也可以打字。可以对她说「换上洋装」「跳个舞」「转过去」「让我看看你的脸」。闲着的时候点她的头或手，她会有反应。画面卡就把画质改成「省电」。")
 
         section("这一版还没有的")
-        note("安卓版是照着 iPhone 版 Vania 一批一批做的。这一版有：3D 角色、聊天框、快捷菜单、大模型对话、她说话、换装、背景、镜头、动作、云盘待命和遥控指令、大疆云台。还没有：跟着人转、眼睛、Gemini 实时语音，后面几版加上。")
+        note("安卓版是照着 iPhone 版 Vania 一批一批做的。这一版有：3D 角色、聊天框、快捷菜单、大模型对话、她说话、换装、背景、镜头、动作、云盘待命和遥控指令、大疆云台、跟着人转、眼睛。还没有：Gemini 实时语音，下一版加上。")
 
         section("记录")
         logView = TextView(this).apply { textSize = 11f; typeface = Typeface.MONOSPACE; setTextColor(0xFFCCCCCC.toInt()) }
@@ -91,6 +91,7 @@ class SettingsActivity : Activity() {
         app.onLog = null
         app.onStandby -= standbyListener
         app.gimbal.onChange -= gimbalListener
+        app.follower.onChange -= gimbalListener
         super.onDestroy()
     }
 
@@ -102,6 +103,8 @@ class SettingsActivity : Activity() {
     private lateinit var gimbalState: TextView
     private lateinit var gimbalPads: LinearLayout
     private lateinit var gimbalBtn: Button
+    private lateinit var followSwitch: Switch
+    private lateinit var followState: TextView
 
     private fun gimbalSection() {
         val g = app.gimbal
@@ -124,7 +127,22 @@ class SettingsActivity : Activity() {
         }
         toggle("打开 App 时自动连", app.store.gimbalAuto) { app.store.gimbalAuto = it }
         toggle("抬头低头反了", g.pitchFlipped) { g.pitchFlipped = it }
-        note("把这台手机夹在大疆 OM 云台上，它就是机器人的身体：别的设备可以远程让它转头（gimbal 指令），机器人的脸也跟着云台的朝向看。用之前先在 DJI Mimo 里断开云台。箭头试着转一下，靶心回到正面（连上时的朝向）。她自己也能转：说「往左看看」「看右边 20 度」「回正」「停」，或者在聊天框打「云台 左转 30」。左右最多各转 120°，抬头 35°、低头 20°。点上箭头她却低头的话，打开「抬头低头反了」。")
+        followSwitch = Switch(this).apply {
+            text = "跟着我转（用前摄找人脸）"; isChecked = app.store.follow; textSize = 15f
+            setOnCheckedChangeListener { _, v -> if (v != app.store.follow) app.setFollow(v) }
+        }
+        col.addView(followSwitch)
+        followState = TextView(this).apply { textSize = 12f; setTextColor(Color.GRAY) }
+        col.addView(followState)
+        app.follower.onChange += gimbalListener
+        note("把这台手机夹在大疆 OM 云台上，它就是机器人的身体：别的设备可以远程让它转头（gimbal 指令），机器人的脸也跟着云台的朝向看。用之前先在 DJI Mimo 里断开云台。箭头试着转一下，靶心回到正面（连上时的朝向）。她自己也能转：说「往左看看」「看右边 20 度」「回正」「停」，或者在聊天框打「云台 左转 30」。左右最多各转 120°，抬头 35°、低头 20°。点上箭头她却低头的话，打开「抬头低头反了」。「跟着我转」打开以后，前摄在手机里找你的脸（不保存、不上传），你走到哪她转到哪；屏幕上方会一直显示摄像头的提示；每次打开 App 要重新开。也可以对她说「跟着我」「别跟了」。")
+
+        section("眼睛")
+        toggle("允许她用摄像头看", app.store.allowSee) { app.store.allowSee = it }
+        field("眼睛模型的接口地址（可以不填）", app.store.eyeBase, InputType.TYPE_TEXT_VARIATION_URI) { app.store.eyeBase = it }
+        field("模型名（要能看图）", app.store.eyeModel, 0) { app.store.eyeModel = it }
+        field("API 密钥", app.store.eyeKey, InputType.TYPE_TEXT_VARIATION_PASSWORD, secret = true) { app.store.eyeKey = it }
+        note("打开以后，你问她「看到了什么」「我在不在」「看看左边有什么」，她会拍一张照片再回答；拍的时候屏幕上方有摄像头的提示，照片不保存。下面三项不填：用手机自己识别，不联网，只认得出有没有人脸、大概是什么东西、看到什么字，比较粗。三项都填（OpenAI 兼容接口、能看图的模型）：照片会发给你填的这个接口，让它描述，细得多。")
         g.onChange += gimbalListener
         refreshGimbal()
     }
@@ -136,6 +154,11 @@ class SettingsActivity : Activity() {
         gimbalState.setTextColor(if (g.connected) 0xFF34C759.toInt() else Color.LTGRAY)
         gimbalPads.visibility = if (g.connected) android.view.View.VISIBLE else android.view.View.GONE
         gimbalBtn.text = if (g.connected || g.phase == Gimbal.Phase.SCANNING || g.phase == Gimbal.Phase.CONNECTING) "断开云台" else "连接云台"
+        if (::followSwitch.isInitialized) {
+            if (followSwitch.isChecked != app.store.follow) followSwitch.isChecked = app.store.follow
+            val f = app.follower
+            followState.text = if (app.store.follow || f.phase != FaceFollower.Phase.OFF) "跟随：${f.phase.label}" else ""
+        }
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
