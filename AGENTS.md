@@ -17,7 +17,7 @@
 |---|---|---|
 | 1 | 3D 角色、聊天框、快捷菜单、DeepSeek 对话、她说话、换装、背景、镜头、动作 | 已做（0.1） |
 | 2 | 云盘待命和遥控指令（info、拍照、录音、定位、手电筒、震动、响铃、robot） | 已做（0.2） |
-| 3 | 大疆云台蓝牙（Duml 协议、闭环转动、软限位、谁在控制） | 没做，`Gimbal.kt` 现在是「没连上」的空壳 |
+| 3 | 大疆云台蓝牙（Duml 协议、闭环转动、软限位、谁在控制） | 已做（0.3） |
 | 4 | 跟着人转、眼睛（CameraX + ML Kit） | 没做，`Eyes.kt` 现在照实说看不见 |
 | 5 | Gemini 实时语音 | 没做 |
 
@@ -36,7 +36,9 @@
 - `Commands.kt`：硬件指令（info、torch、photo、audio、location、vibrate、ring；shell 不支持）。拍照、录音、定位只在 App 在前台时做。
 - `RobotCommand.kt`：`{"do":"robot"}` 指令，控制屏幕里的角色。
 - `StandbyService.kt`：待命时的前台服务，通知栏一直显示「Vania 待命中」。
-- `Gimbal.kt`、`Eyes.kt`：空壳，见上面的进度。
+- `Duml.kt`：大疆 DUML 协议（帧、CRC、拆帧、速度指令、姿态解算）。照 iPhone 版的 `Duml.swift` 翻的，`DumlTest` 用同一组标准答案（来自 Linggo 的 ble.html）逐字节核对，别改那些数。
+- `Gimbal.kt`：蓝牙低功耗连大疆 OM 云台（系统里连着的 → 上次那台 → 按名字扫描），写操作排队（安卓同一时间只能一个），控制逻辑和 iPhone 版一样：闭环 `turn`、给大模型和聊天框的 `aim`（右、上为正，软限位，先快后准）、给跟随的 `track`、`Owner` 谁在控制、遥控 `gimbal` 指令。
+- `Eyes.kt`：空壳，见上面的进度。
 
 ## 怎么编译、怎么测
 

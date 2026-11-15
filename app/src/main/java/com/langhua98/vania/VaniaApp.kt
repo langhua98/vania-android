@@ -20,7 +20,7 @@ import java.util.Locale
 class VaniaApp : Application() {
     lateinit var store: Store; private set
     val face = FaceBridge()
-    val gimbal = Gimbal()
+    lateinit var gimbal: Gimbal; private set
     lateinit var talk: Talk; private set
 
     /// 运行记录（设置页最下面显示），最多留 200 行。不记密钥、不记照片内容
@@ -41,6 +41,13 @@ class VaniaApp : Application() {
         super.onCreate()
         instance = this
         store = Store(this)
+        gimbal = Gimbal(this)
+        gimbal.onLog = { log(it) }
+        // 脸跟着云台的朝向看过去（网页的 gimbal 消息：yaw 负 = 屏幕左，pitch 正 = 抬头）
+        gimbal.onPose = { yaw, pitch, connected ->
+            face.send("type" to "gimbal", "yaw" to Math.round(yaw * 10) / 10.0, "pitch" to Math.round(pitch * 10) / 10.0, "connected" to connected)
+        }
+        if (store.gimbalAuto && gimbal.hasPermission()) gimbal.connect()
         talk = Talk(this, store, face, gimbal) { log(it) }
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             private var resumed = 0

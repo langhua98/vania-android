@@ -16,8 +16,8 @@ android {
         minSdk = 26
         targetSdk = 35
         // 每次出新版都要改版本号（AGENTS.md）：versionName 和 versionCode 一起加
-        versionCode = 2
-        versionName = "0.2"
+        versionCode = 3
+        versionName = "0.3"
         buildConfigField("int", "BUILD_NUMBER", "$buildNumber")
     }
 
