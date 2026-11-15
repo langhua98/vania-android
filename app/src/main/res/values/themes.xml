@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 主界面：全屏的 3D 角色，黑底，状态栏和导航栏透明 -->
+    <style name="Theme.Vania" parent="android:Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:colorAccent">#FF7A17</item>
+    </style>
+    <!-- 设置页：普通的深色界面 -->
+    <style name="Theme.Vania.Settings" parent="android:Theme.Material">
+        <item name="android:colorAccent">#FF7A17</item>
+        <item name="android:colorPrimary">#1C1C1E</item>
+        <item name="android:statusBarColor">#1C1C1E</item>
+    </style>
+</resources>
